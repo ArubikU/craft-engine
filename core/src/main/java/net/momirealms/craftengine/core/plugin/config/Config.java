@@ -97,6 +97,7 @@ public class Config {
     protected Component resource_pack$send$prompt;
 
     protected boolean light_system$force_update_light;
+    protected boolean light_system$async_update;
     protected boolean light_system$enable;
 
     protected int chunk_system$compression_method;
@@ -120,6 +121,7 @@ public class Config {
     protected boolean block$predict_breaking;
     protected int block$predict_breaking_interval;
     protected double block$extended_interaction_range;
+    protected boolean block$chunk_relighter;
 
     protected boolean recipe$enable;
     protected boolean recipe$disable_vanilla_recipes$all;
@@ -224,6 +226,8 @@ public class Config {
                             .builder()
                             .setVersioning(new BasicVersioning("config-version"))
                             .addIgnoredRoute(PluginProperties.getValue("config"), "resource-pack.delivery.hosting", '.')
+                            .addIgnoredRoute(PluginProperties.getValue("config"), "chunk-system.process-invalid-blocks.convert", '.')
+                            .addIgnoredRoute(PluginProperties.getValue("config"), "chunk-system.process-invalid-furniture.convert", '.')
                             .build());
         }
         try {
@@ -284,7 +288,7 @@ public class Config {
         resource_pack$protection$obfuscation$resource_location$random_path$source = config.getString("resource-pack.protection.obfuscation.resource-location.random-path.source", "obf");
         resource_pack$protection$obfuscation$resource_location$random_path$anti_unzip = config.getBoolean("resource-pack.protection.obfuscation.resource-location.random-path.anti-unzip", false);
         resource_pack$protection$obfuscation$resource_location$random_atlas$images_per_canvas = config.getInt("resource-pack.protection.obfuscation.resource-location.random-atlas.images-per-canvas", 16);
-        resource_pack$protection$obfuscation$resource_location$random_atlas$use_double = config.getBoolean("resource-pack.protection.obfuscation.resource-location.random-atlas.use-double", true);
+        resource_pack$protection$obfuscation$resource_location$random_atlas$use_double = config.getBoolean("resource-pack.protection.obfuscation.resource-location.random-atlas.use-double", false);
         resource_pack$protection$obfuscation$resource_location$bypass_textures = config.getStringList("resource-pack.protection.obfuscation.resource-location.bypass-textures");
         resource_pack$protection$obfuscation$resource_location$bypass_models = config.getStringList("resource-pack.protection.obfuscation.resource-location.bypass-models");
         resource_pack$protection$obfuscation$resource_location$bypass_sounds = config.getStringList("resource-pack.protection.obfuscation.resource-location.bypass-sounds");
@@ -311,6 +315,7 @@ public class Config {
 
         // light
         light_system$force_update_light = config.getBoolean("light-system.force-update-light", false);
+        light_system$async_update = config.getBoolean("light-system.async-update", true);
         light_system$enable = config.getBoolean("light-system.enable", true);
 
         // chunk
@@ -384,6 +389,7 @@ public class Config {
         block$predict_breaking = config.getBoolean("block.predict-breaking.enable", true);
         block$predict_breaking_interval = Math.max(config.getInt("block.predict-breaking.interval", 10), 1);
         block$extended_interaction_range = Math.max(config.getDouble("block.predict-breaking.extended-interaction-range", 0.5), 0.0);
+        block$chunk_relighter = config.getBoolean("block.chunk-relighter", true);
 
         // recipe
         recipe$enable = config.getBoolean("recipe.enable", true);
@@ -447,6 +453,10 @@ public class Config {
 
     public static boolean debugItem() {
         return instance.debug$item;
+    }
+
+    public static boolean debugBlockEntity() {
+        return false;
     }
 
     public static boolean debugFurniture() {
@@ -871,6 +881,14 @@ public class Config {
 
     public static boolean triggerUpdateDrop() {
         return instance.item$update_triggers$drop;
+    }
+
+    public static boolean enableChunkRelighter() {
+        return instance.block$chunk_relighter;
+    }
+
+    public static boolean asyncLightUpdate() {
+        return instance.light_system$async_update;
     }
 
     public void setObf(boolean enable) {

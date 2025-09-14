@@ -50,8 +50,8 @@ public class BukkitWorld implements World {
     }
 
     @Override
-    public BlockInWorld getBlockAt(int x, int y, int z) {
-        return new BukkitBlockInWorld(platformWorld().getBlockAt(x, y, z));
+    public ExistingBlock getBlockAt(int x, int y, int z) {
+        return new BukkitExistingBlock(platformWorld().getBlockAt(x, y, z));
     }
 
     @Override
@@ -116,11 +116,16 @@ public class BukkitWorld implements World {
     public void setBlockAt(int x, int y, int z, BlockStateWrapper blockState, int flags) {
         Object worldServer = serverWorld();
         Object blockPos = FastNMS.INSTANCE.constructor$BlockPos(x, y, z);
-        FastNMS.INSTANCE.method$LevelWriter$setBlock(worldServer, blockPos, blockState.handle(), flags);
+        FastNMS.INSTANCE.method$LevelWriter$setBlock(worldServer, blockPos, blockState.literalObject(), flags);
     }
 
     @Override
     public void levelEvent(int id, BlockPos pos, int data) {
         FastNMS.INSTANCE.method$LevelAccessor$levelEvent(serverWorld(), id, LocationUtils.toBlockPos(pos), data);
+    }
+
+    @Override
+    public CEWorld storageWorld() {
+        return BukkitWorldManager.instance().getWorld(uuid());
     }
 }

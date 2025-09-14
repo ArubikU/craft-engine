@@ -1571,7 +1571,8 @@ public final class CoreReflections {
     );
 
     public static final Method method$BlockBehaviour$hasAnalogOutputSignal = requireNonNull(
-            ReflectionUtils.getDeclaredMethod(clazz$BlockBehaviour, boolean.class, new String[]{"hasAnalogOutputSignal", "c"}, clazz$BlockState)
+            ReflectionUtils.getDeclaredMethod(clazz$BlockBehaviour, boolean.class, new String[]{"hasAnalogOutputSignal",
+            VersionHelper.isOrAbove1_20_5() ? "c_" : "d_"}, clazz$BlockState)
     );
 
     public static final Method method$BlockBehaviour$getAnalogOutputSignal = requireNonNull(
@@ -3670,11 +3671,12 @@ public final class CoreReflections {
     // 1.20.5+
     public static final Field field$ItemStack$CODEC = ReflectionUtils.getDeclaredField(clazz$ItemStack, "CODEC", "b");
 
-    public static final Codec<?> instance$ItemStack$CODEC;
+    public static final Codec<Object> instance$ItemStack$CODEC = getItemStack$CODEC();
 
-    static {
+    @SuppressWarnings("unchecked")
+    private static Codec<Object> getItemStack$CODEC() {
         try {
-            instance$ItemStack$CODEC = VersionHelper.isOrAbove1_20_5() ? (Codec<?>) field$ItemStack$CODEC.get(null) : null;
+            return VersionHelper.isOrAbove1_20_5() ? (Codec<Object>) field$ItemStack$CODEC.get(null) : null;
         } catch (ReflectiveOperationException e) {
             throw new ReflectionInitException("Failed to init ItemStack$CODEC", e);
         }
@@ -4202,5 +4204,9 @@ public final class CoreReflections {
                     "world.level.storage.loot.entries.LootEntryType",
                     "world.level.storage.loot.entries.LootPoolEntryType"
             )
+    );
+
+    public static final Method method$BlockAndTintGetter$getLightEngine = requireNonNull(
+            ReflectionUtils.getDeclaredMethod(clazz$BlockAndTintGetter, clazz$LevelLightEngine)
     );
 }

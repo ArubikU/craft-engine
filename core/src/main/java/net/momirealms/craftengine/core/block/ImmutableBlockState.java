@@ -1,6 +1,11 @@
 package net.momirealms.craftengine.core.block;
 
 import it.unimi.dsi.fastutil.objects.Reference2ObjectArrayMap;
+import net.momirealms.craftengine.core.block.behavior.EntityBlockBehavior;
+import net.momirealms.craftengine.core.block.entity.BlockEntity;
+import net.momirealms.craftengine.core.block.entity.BlockEntityType;
+import net.momirealms.craftengine.core.block.entity.render.BlockEntityRendererConfig;
+import net.momirealms.craftengine.core.block.entity.tick.BlockEntityTicker;
 import net.momirealms.craftengine.core.block.properties.Property;
 import net.momirealms.craftengine.core.entity.player.Player;
 import net.momirealms.craftengine.core.item.Item;
@@ -8,6 +13,7 @@ import net.momirealms.craftengine.core.loot.LootTable;
 import net.momirealms.craftengine.core.plugin.context.ContextHolder;
 import net.momirealms.craftengine.core.plugin.context.parameter.DirectContextParameters;
 import net.momirealms.craftengine.core.registry.Holder;
+import net.momirealms.craftengine.core.world.CEWorld;
 import net.momirealms.craftengine.core.world.World;
 import net.momirealms.sparrow.nbt.CompoundTag;
 import net.momirealms.sparrow.nbt.NBT;
@@ -19,11 +25,14 @@ import java.util.List;
 
 public final class ImmutableBlockState extends BlockStateHolder {
     private CompoundTag tag;
-    private BlockStateWrapper.CustomBlockState customBlockState;
-    private BlockStateWrapper.VanillaBlockState vanillaBlockState;
+    private BlockStateWrapper customBlockState;
+    private BlockStateWrapper vanillaBlockState;
     private BlockBehavior behavior;
     private Integer hashCode;
     private BlockSettings settings;
+    private BlockEntityType<? extends BlockEntity> blockEntityType;
+    @Nullable
+    private BlockEntityRendererConfig renderer;
 
     ImmutableBlockState(
             Holder<CustomBlock> owner,
@@ -48,8 +57,25 @@ public final class ImmutableBlockState extends BlockStateHolder {
         this.settings = settings;
     }
 
+    public BlockEntityType<? extends BlockEntity> blockEntityType() {
+        return blockEntityType;
+    }
+
+    public void setBlockEntityType(BlockEntityType<? extends BlockEntity> blockEntityType) {
+        this.blockEntityType = blockEntityType;
+    }
+
     public boolean isEmpty() {
         return this == EmptyBlock.STATE;
+    }
+
+    @Nullable
+    public BlockEntityRendererConfig entityRenderer() {
+        return this.renderer;
+    }
+
+    public void setEntityRenderer(@Nullable BlockEntityRendererConfig rendererConfig) {
+        this.renderer = rendererConfig;
     }
 
     @Override
@@ -67,6 +93,14 @@ public final class ImmutableBlockState extends BlockStateHolder {
         return this.hashCode;
     }
 
+    public boolean hasBlockEntity() {
+        return this.blockEntityType != null;
+    }
+
+    public boolean hasBlockEntityRenderer() {
+        return this.renderer != null;
+    }
+
     public BlockStateWrapper customBlockState() {
         return this.customBlockState;
     }
@@ -75,11 +109,11 @@ public final class ImmutableBlockState extends BlockStateHolder {
         return this.vanillaBlockState;
     }
 
-    public void setCustomBlockState(@NotNull BlockStateWrapper.CustomBlockState customBlockState) {
+    public void setCustomBlockState(@NotNull BlockStateWrapper customBlockState) {
         this.customBlockState = customBlockState;
     }
 
-    public void setVanillaBlockState(@NotNull BlockStateWrapper.VanillaBlockState vanillaBlockState) {
+    public void setVanillaBlockState(@NotNull BlockStateWrapper vanillaBlockState) {
         this.vanillaBlockState = vanillaBlockState;
     }
 
@@ -131,5 +165,12 @@ public final class ImmutableBlockState extends BlockStateHolder {
         LootTable<Object> lootTable = (LootTable<Object>) block.lootTable();
         if (lootTable == null) return List.of();
         return lootTable.getRandomItems(builder.withParameter(DirectContextParameters.CUSTOM_BLOCK_STATE, this).build(), world, player);
+    }
+
+    @SuppressWarnings("unchecked")
+    public <T extends BlockEntity> BlockEntityTicker<T> createBlockEntityTicker(CEWorld world, BlockEntityType<? extends BlockEntity> type) {
+        EntityBlockBehavior blockBehavior = this.behavior.getEntityBehavior();
+        if (blockBehavior == null) return null;
+        return (BlockEntityTicker<T>) blockBehavior.createBlockEntityTicker(world, this, type);
     }
 }

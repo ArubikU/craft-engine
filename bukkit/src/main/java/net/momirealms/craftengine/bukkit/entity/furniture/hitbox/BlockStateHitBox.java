@@ -139,11 +139,11 @@ public class BlockStateHitBox extends AbstractHitBox {
                 // Get the bukkit block data from the world
                 org.bukkit.World bukkitWorld = (org.bukkit.World) world.platformWorld();
                 org.bukkit.block.data.BlockData blockData = bukkitWorld.getBlockAt(blockX, blockY, blockZ).getBlockData();
-                this.originalBlockState = BlockStateUtils.toPackedBlockState(blockData);
+                this.originalBlockState = BlockStateUtils.toBlockStateWrapper(blockData);
             } catch (Exception e) {
                 CraftEngine.instance().logger().warn("Failed to get original block state", e);
                 // Fallback to air
-                this.originalBlockState = CraftEngine.instance().blockManager().createPackedBlockState("minecraft:air");
+                this.originalBlockState = CraftEngine.instance().blockManager().createBlockState("minecraft:air");
             }
             
             // Place the block with client-side flags to avoid server collision and piston movement
@@ -233,7 +233,7 @@ public class BlockStateHitBox extends AbstractHitBox {
     private String getBlockMaterial(BlockStateWrapper blockState) {
         try {
             // Convert to bukkit block data to get material
-            Object nmsBlockState = blockState.handle();
+            Object nmsBlockState = blockState.literalObject();
             org.bukkit.block.data.BlockData blockData = BlockStateUtils.fromBlockData(nmsBlockState);
             return blockData.getMaterial().getKey().toString();
         } catch (Exception e) {
@@ -383,8 +383,9 @@ public class BlockStateHitBox extends AbstractHitBox {
 
         @Override
         public HitBox create(Map<String, Object> arguments) {
-            Vector3f position = net.momirealms.craftengine.core.util.MiscUtils.getAsVector3f(
+            Vector3f position = ResourceConfigUtils.getAsVector3f(
                 arguments.getOrDefault("position", "0"), "position");
+                
             
             String blockStateString = ResourceConfigUtils.requireNonEmptyStringOrThrow(
                 arguments.get("block-state"), "warning.config.furniture.hitbox.blockstate.missing_block_state");
@@ -402,7 +403,7 @@ public class BlockStateHitBox extends AbstractHitBox {
                 arguments.getOrDefault("invert-rotation", false), "invert-rotation");
             
             LazyReference<BlockStateWrapper> lazyBlockState = LazyReference.lazyReference(
-                () -> CraftEngine.instance().blockManager().createPackedBlockState(blockStateString));
+                () -> CraftEngine.instance().blockManager().createBlockState(blockStateString));
             
             return new BlockStateHitBox(
                 HitBoxFactory.getSeats(arguments),

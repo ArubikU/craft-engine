@@ -135,7 +135,7 @@ class BlockStateHitBoxData {
 
             if (originalStateId >= 0) {
                 // Reconstruct the original block state from registry ID
-                originalBlockState = BlockStateUtils.toPackedBlockState(
+                originalBlockState = BlockStateUtils.toBlockStateWrapper(
                         BlockStateUtils.fromBlockData(BlockStateUtils.idToBlockState(originalStateId)));
             }
 

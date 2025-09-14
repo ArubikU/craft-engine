@@ -29,7 +29,6 @@ resource-pack:
       seed: 0 # 0 = random seed
       fake-directory: false
       escape-unicode: false
-      break-json: false
       resource-location:
         enable: true
         random-namespace:
@@ -41,7 +40,6 @@ resource-pack:
           anti-unzip: false
         random-atlas:
           images-per-canvas: 32 # 0 = disable
-          use-double: true
         # Sometimes, some vanilla files that have been overwritten might be mistakenly obfuscated.
         # Please add the ignored textures/models/sounds here.
         bypass-textures:
@@ -67,10 +65,10 @@ resource-pack:
   # Remove 1.21.5+ tinted_leaves particles
   remove-tinted-leaves-particle: true
   merge-external-folders:
-    - ModelEngine/resource pack
-    - BetterModel/build
+    - "ModelEngine/resource pack"
   merge-external-zip-files:
-    - CustomNameplates/resourcepack.zip
+    - "CustomNameplates/resourcepack.zip"
+    - "BetterModel/build.zip"
   exclude-file-extensions: ["md", "psd", "bbmodel", "db", "ini"]
   # Exclude the shaders when generating the resource pack
   exclude-core-shaders: false
@@ -363,6 +361,8 @@ gui:
 light-system:
   # Required for custom light-emitting blocks
   enable: true
+  # Async light update
+  async-update: true
 
 chunk-system:
   # With cache system, those frequently load/unload chunks would consume fewer resources on serialization

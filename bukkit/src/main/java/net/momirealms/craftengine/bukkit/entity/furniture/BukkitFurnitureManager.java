@@ -51,7 +51,7 @@ import net.momirealms.craftengine.core.entity.furniture.HitBox;
 import net.momirealms.craftengine.core.plugin.config.Config;
 import net.momirealms.craftengine.core.sound.SoundData;
 import net.momirealms.craftengine.core.util.Key;
-import net.momirealms.craftengine.core.util.MiscUtils;
+import net.momirealms.craftengine.core.util.ResourceConfigUtils;
 import net.momirealms.craftengine.core.util.VersionHelper;
 import net.momirealms.craftengine.core.world.BlockPosition;
 import net.momirealms.craftengine.core.world.WorldPosition;
@@ -410,7 +410,7 @@ public class BukkitFurnitureManager extends AbstractFurnitureManager {
             plugin.logger().warn("Failed to get vector3f for player " + player.getName() + "'s seat");
             return;
         }
-        Vector3f seatPos = MiscUtils.getAsVector3f(vector3f, "seat");
+        Vector3f seatPos = ResourceConfigUtils.getAsVector3f(vector3f, "seat");
         furniture.removeOccupiedSeat(seatPos);
 
         if (player.getVehicle() != null) return;

@@ -42,6 +42,7 @@ import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 import org.yaml.snakeyaml.LoaderOptions;
 import org.yaml.snakeyaml.Yaml;
+import org.yaml.snakeyaml.scanner.ScannerException;
 
 import javax.imageio.ImageIO;
 import java.awt.image.BufferedImage;
@@ -84,7 +85,8 @@ public abstract class AbstractPackManager implements PackManager {
     }
 
     private final CraftEngine plugin;
-    private final BiConsumer<Path, Path> eventDispatcher;
+    private final Consumer<PackCacheData> cacheEventDispatcher;
+    private final BiConsumer<Path, Path> generationEventDispatcher;
     private final Map<String, Pack> loadedPacks = new HashMap<>();
     private final Map<String, ConfigParser> sectionParsers = new HashMap<>();
     private final JsonObject vanillaAtlas;
@@ -93,9 +95,10 @@ public abstract class AbstractPackManager implements PackManager {
     protected BiConsumer<Path, Path> zipGenerator;
     protected ResourcePackHost resourcePackHost;
 
-    public AbstractPackManager(CraftEngine plugin, BiConsumer<Path, Path> eventDispatcher) {
+    public AbstractPackManager(CraftEngine plugin, Consumer<PackCacheData> cacheEventDispatcher, BiConsumer<Path, Path> generationEventDispatcher) {
         this.plugin = plugin;
-        this.eventDispatcher = eventDispatcher;
+        this.cacheEventDispatcher = cacheEventDispatcher;
+        this.generationEventDispatcher = generationEventDispatcher;
         this.zipGenerator = (p1, p2) -> {};
         Path resourcesFolder = this.plugin.dataFolderPath().resolve("resources");
         try {
@@ -266,7 +269,9 @@ public abstract class AbstractPackManager implements PackManager {
     @Override
     public void initCachedAssets() {
         try {
-            this.updateCachedAssets(null);
+            PackCacheData cacheData = new PackCacheData(plugin);
+            this.cacheEventDispatcher.accept(cacheData);
+            this.updateCachedAssets(cacheData, null);
         } catch (Exception e) {
             this.plugin.logger().warn("Failed to update cached assets", e);
         }
@@ -421,6 +426,11 @@ public abstract class AbstractPackManager implements PackManager {
         plugin.saveResource("resources/default/resourcepack/assets/minecraft/textures/block/custom/copper_coil_on.png");
         plugin.saveResource("resources/default/resourcepack/assets/minecraft/textures/block/custom/copper_coil_on_side.png");
         plugin.saveResource("resources/default/resourcepack/assets/minecraft/textures/block/custom/chessboard_block.png");
+        plugin.saveResource("resources/default/resourcepack/assets/minecraft/textures/block/custom/safe_block_top.png");
+        plugin.saveResource("resources/default/resourcepack/assets/minecraft/textures/block/custom/safe_block_bottom.png");
+        plugin.saveResource("resources/default/resourcepack/assets/minecraft/textures/block/custom/safe_block_side.png");
+        plugin.saveResource("resources/default/resourcepack/assets/minecraft/textures/block/custom/safe_block_front.png");
+        plugin.saveResource("resources/default/resourcepack/assets/minecraft/textures/block/custom/safe_block_front_open.png");
         // items
         plugin.saveResource("resources/default/configuration/items.yml");
         plugin.saveResource("resources/default/resourcepack/assets/minecraft/textures/item/custom/topaz_rod.png");
@@ -543,6 +553,19 @@ public abstract class AbstractPackManager implements PackManager {
                                 } catch (IOException e) {
                                     AbstractPackManager.this.plugin.logger().severe("Error while reading config file: " + path, e);
                                     return FileVisitResult.CONTINUE;
+                                } catch (ScannerException e) {
+                                    if (e.getMessage() != null && e.getMessage().contains("TAB") && e.getMessage().contains("indentation")) {
+                                        try {
+                                            String content = Files.readString(path);
+                                            content = content.replace("\t", "    ");
+                                            Files.writeString(path, content);
+                                        } catch (Exception ex) {
+                                            AbstractPackManager.this.plugin.logger().severe("Failed to fix tab indentation in config file: " + path, ex);
+                                        }
+                                    } else {
+                                        AbstractPackManager.this.plugin.logger().severe("Error found while reading config file: " + path, e);
+                                    }
+                                    return FileVisitResult.CONTINUE;
                                 } catch (LocalizedException e) {
                                     e.setArgument(0, path.toString());
                                     TranslationManager.instance().log(e.node(), e.arguments());
@@ -639,11 +662,15 @@ public abstract class AbstractPackManager implements PackManager {
         this.plugin.logger().info("Generating resource pack...");
         long time1 = System.currentTimeMillis();
 
+        // Create cache data
+        PackCacheData cacheData = new PackCacheData(this.plugin);
+        this.cacheEventDispatcher.accept(cacheData);
+
         // get the target location
         try (FileSystem fs = Jimfs.newFileSystem(Configuration.forCurrentPlatform())) {
             // firstly merge existing folders
             Path generatedPackPath = fs.getPath("resource_pack");
-            List<Pair<String, List<Path>>> duplicated = this.updateCachedAssets(fs);
+            List<Pair<String, List<Path>>> duplicated = this.updateCachedAssets(cacheData, fs);
             if (!duplicated.isEmpty()) {
                 plugin.logger().severe(AdventureHelper.miniMessage().stripTags(TranslationManager.instance().miniMessageTranslation("warning.config.pack.duplicated_files")));
                 int x = 1;
@@ -698,7 +725,7 @@ public abstract class AbstractPackManager implements PackManager {
             }
             long time4 = System.currentTimeMillis();
             this.plugin.logger().info("Created resource pack zip file in " + (time4 - time3) + "ms");
-            this.eventDispatcher.accept(generatedPackPath, finalPath);
+            this.generationEventDispatcher.accept(generatedPackPath, finalPath);
         }
     }
 
@@ -1824,9 +1851,13 @@ public abstract class AbstractPackManager implements PackManager {
                     }
                     JsonArray overrides = new JsonArray();
                     for (LegacyOverridesModel legacyOverridesModel : legacyOverridesModels) {
-                        overrides.add(legacyOverridesModel.toLegacyPredicateElement());
+                        if (legacyOverridesModel.hasPredicate()) {
+                            overrides.add(legacyOverridesModel.toLegacyPredicateElement());
+                        }
                     }
-                    itemJson.add("overrides", overrides);
+                    if (!overrides.isEmpty()) {
+                        itemJson.add("overrides", overrides);
+                    }
                 } catch (IOException e) {
                     this.plugin.logger().warn("Failed to read item json " + itemPath.toAbsolutePath());
                     continue;
@@ -1834,13 +1865,31 @@ public abstract class AbstractPackManager implements PackManager {
             } else {
                 // 如果路径不存在，则需要我们创建一个json对象，并对接model的路径
                 itemJson = new JsonObject();
-                LegacyOverridesModel firstModel = legacyOverridesModels.getFirst();
-                itemJson.addProperty("parent", firstModel.model());
-                JsonArray overrides = new JsonArray();
+
+                LegacyOverridesModel firstBaseModel = null;
+                List<JsonObject> overrideJsons = new ArrayList<>();
                 for (LegacyOverridesModel legacyOverridesModel : legacyOverridesModels) {
-                    overrides.add(legacyOverridesModel.toLegacyPredicateElement());
+                    if (!legacyOverridesModel.hasPredicate()) {
+                        if (firstBaseModel == null) {
+                            firstBaseModel = legacyOverridesModel;
+                        }
+                    } else {
+                        JsonObject legacyPredicateElement = legacyOverridesModel.toLegacyPredicateElement();
+                        overrideJsons.add(legacyPredicateElement);
+                    }
                 }
-                itemJson.add("overrides", overrides);
+                if (firstBaseModel == null) {
+                    firstBaseModel = legacyOverridesModels.getFirst();
+                }
+
+                itemJson.addProperty("parent", firstBaseModel.model());
+                if (!overrideJsons.isEmpty()) {
+                    JsonArray overrides = new JsonArray();
+                    for (JsonObject override : overrideJsons) {
+                        overrides.add(override);
+                    }
+                    itemJson.add("overrides", overrides);
+                }
             }
             try {
                 Files.createDirectories(itemPath.getParent());
@@ -2117,7 +2166,7 @@ public abstract class AbstractPackManager implements PackManager {
         }
     }
 
-    private List<Pair<String, List<Path>>> updateCachedAssets(@Nullable FileSystem fs) throws IOException {
+    private List<Pair<String, List<Path>>> updateCachedAssets(@NotNull PackCacheData cacheData, @Nullable FileSystem fs) throws IOException {
         Map<String, List<Path>> conflictChecker = new Object2ObjectOpenHashMap<>(Math.max(128, this.cachedAssetFiles.size()));
         Map<Path, CachedAssetFile> previousFiles = this.cachedAssetFiles;
         this.cachedAssetFiles = new Object2ObjectOpenHashMap<>(Math.max(128, this.cachedAssetFiles.size()));
@@ -2127,10 +2176,7 @@ public abstract class AbstractPackManager implements PackManager {
                 .filter(Pack::enabled)
                 .map(Pack::resourcePackFolder)
                 .toList());
-        folders.addAll(Config.foldersToMerge().stream()
-                .map(it -> this.plugin.dataFolderPath().getParent().resolve(it))
-                .filter(Files::exists)
-                .toList());
+        folders.addAll(cacheData.externalFolders());
         for (Path sourceFolder : folders) {
             if (Files.exists(sourceFolder)) {
                 Files.walkFileTree(sourceFolder, EnumSet.of(FileVisitOption.FOLLOW_LINKS), Integer.MAX_VALUE, new SimpleFileVisitor<>() {
@@ -2142,13 +2188,7 @@ public abstract class AbstractPackManager implements PackManager {
                 });
             }
         }
-        List<Path> externalZips = Config.zipsToMerge().stream()
-                .map(it -> this.plugin.dataFolderPath().getParent().resolve(it))
-                .filter(Files::exists)
-                .filter(Files::isRegularFile)
-                .filter(file -> file.getFileName().toString().endsWith(".zip"))
-                .toList();
-        for (Path zip : externalZips) {
+        for (Path zip : cacheData.externalZips()) {
             processZipFile(zip, zip.getParent(), fs, conflictChecker, previousFiles);
         }
 

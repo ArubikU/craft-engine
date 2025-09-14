@@ -270,6 +270,7 @@ public class RecipeEventListener implements Listener {
     预处理会阻止一些不合理的原版材质造成的合并问题
      */
     private void preProcess(PrepareAnvilEvent event) {
+        if (event.getResult() == null) return;
         AnvilInventory inventory = event.getInventory();
         ItemStack first = inventory.getFirstItem();
         ItemStack second = inventory.getSecondItem();
@@ -284,6 +285,10 @@ public class RecipeEventListener implements Listener {
         }
         // 如果第二个物品是附魔书，那么忽略
         if (wrappedSecond.vanillaId().equals(ItemKeys.ENCHANTED_BOOK)) {
+            // 禁止不可附魔的物品被附魔书附魔
+            if (firstCustom.isPresent() && !firstCustom.get().settings().canEnchant()) {
+                event.setResult(null);
+            }
             return;
         }
 
@@ -313,12 +318,23 @@ public class RecipeEventListener implements Listener {
             return;
         }
 
-        // 如果禁止在铁砧使用两个相同物品修复
-        firstCustom.ifPresent(it -> {
-            if (it.settings().canRepair() == Tristate.FALSE) {
+        if (firstCustom.isPresent()) {
+            CustomItem<ItemStack> firstCustomItem = firstCustom.get();
+            if (firstCustomItem.settings().repairable().anvilCombine() == Tristate.FALSE) {
                 event.setResult(null);
+                return;
             }
-        });
+
+            Item<ItemStack> wrappedResult = BukkitItemManager.instance().wrap(event.getResult());
+            if (!firstCustomItem.settings().canEnchant()) {
+                Object previousEnchantment = wrappedFirst.getExactComponent(ComponentTypes.ENCHANTMENTS);
+                if (previousEnchantment != null) {
+                    wrappedResult.setExactComponent(ComponentTypes.ENCHANTMENTS, previousEnchantment);
+                } else {
+                    wrappedResult.resetComponent(ComponentTypes.ENCHANTMENTS);
+                }
+            }
+        }
     }
 
     /*
@@ -356,7 +372,7 @@ public class RecipeEventListener implements Listener {
         Key firstId = wrappedFirst.id();
         Optional<CustomItem<ItemStack>> optionalCustomTool = wrappedFirst.getCustomItem();
         // 物品无法被修复
-        if (optionalCustomTool.isPresent() && optionalCustomTool.get().settings().canRepair() == Tristate.FALSE) {
+        if (optionalCustomTool.isPresent() && optionalCustomTool.get().settings().repairable().anvilRepair() == Tristate.FALSE) {
             return;
         }
 
@@ -477,12 +493,10 @@ public class RecipeEventListener implements Listener {
      */
     @SuppressWarnings("UnstableApiUsage")
     private void processRename(PrepareAnvilEvent event) {
+        if (event.getResult() == null) return;
         AnvilInventory inventory = event.getInventory();
         ItemStack first = inventory.getFirstItem();
         if (ItemStackUtils.isEmpty(first)) {
-            return;
-        }
-        if (event.getResult() == null) {
             return;
         }
         Item<ItemStack> wrappedFirst = BukkitItemManager.instance().wrap(first);
@@ -593,6 +607,35 @@ public class RecipeEventListener implements Listener {
         CraftingInventory inventory = event.getInventory();
         if (!(optionalRecipe.get() instanceof CustomCraftingTableRecipe<ItemStack> craftingTableRecipe)) {
             inventory.setResult(null);
+            return;
+        }
+        CraftingInput<ItemStack> input = getCraftingInput(inventory);
+        if (input == null) return;
+        Player player = InventoryUtils.getPlayerFromInventoryEvent(event);
+        BukkitServerPlayer serverPlayer = BukkitAdaptors.adapt(player);
+        if (craftingTableRecipe.hasVisualResult()) {
+            inventory.setResult(craftingTableRecipe.assembleVisual(input, new ItemBuildContext(serverPlayer, ContextHolder.EMPTY)));
+        } else {
+            inventory.setResult(craftingTableRecipe.assemble(input, new ItemBuildContext(serverPlayer, ContextHolder.EMPTY)));
+        }
+    }
+
+    @EventHandler(ignoreCancelled = true)
+    public void onCraftingFinish(CraftItemEvent event) {
+        if (!Config.enableRecipeSystem()) return;
+        org.bukkit.inventory.Recipe recipe = event.getRecipe();
+        if (!(recipe instanceof CraftingRecipe craftingRecipe)) return;
+        Key recipeId = Key.of(craftingRecipe.getKey().namespace(), craftingRecipe.getKey().value());
+        Optional<Recipe<ItemStack>> optionalRecipe = this.recipeManager.recipeById(recipeId);
+        // 也许是其他插件注册的配方，直接无视
+        if (optionalRecipe.isEmpty()) {
+            return;
+        }
+        CraftingInventory inventory = event.getInventory();
+        if (!(optionalRecipe.get() instanceof CustomCraftingTableRecipe<ItemStack> craftingTableRecipe)) {
+            return;
+        }
+        if (!craftingTableRecipe.hasVisualResult()) {
             return;
         }
         CraftingInput<ItemStack> input = getCraftingInput(inventory);

@@ -509,6 +509,7 @@ public final class BlockGenerator {
             }
         }
     }
+
     public static class PerformBoneMealInterceptor {
         public static final PerformBoneMealInterceptor INSTANCE = new PerformBoneMealInterceptor();
 

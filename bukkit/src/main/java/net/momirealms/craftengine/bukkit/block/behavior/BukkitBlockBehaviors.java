@@ -27,6 +27,8 @@ public class BukkitBlockBehaviors extends BlockBehaviors {
     public static final Key STAIRS_BLOCK = Key.from("craftengine:stairs_block");
     public static final Key PRESSURE_PLATE_BLOCK = Key.from("craftengine:pressure_plate_block");
     public static final Key DOUBLE_HIGH_BLOCK = Key.from("craftengine:double_high_block");
+    public static final Key CHANGE_OVER_TIME_BLOCK = Key.from("craftengine:change_over_time_block");
+    public static final Key SIMPLE_STORAGE_BLOCK = Key.from("craftengine:simple_storage_block");
 
     public static void init() {
         register(EMPTY, (block, args) -> EmptyBlockBehavior.INSTANCE);
@@ -52,5 +54,7 @@ public class BukkitBlockBehaviors extends BlockBehaviors {
         register(STAIRS_BLOCK, StairsBlockBehavior.FACTORY);
         register(PRESSURE_PLATE_BLOCK, PressurePlateBlockBehavior.FACTORY);
         register(DOUBLE_HIGH_BLOCK, DoubleHighBlockBehavior.FACTORY);
+        register(CHANGE_OVER_TIME_BLOCK, ChangeOverTimeBlockBehavior.FACTORY);
+        register(SIMPLE_STORAGE_BLOCK, SimpleStorageBlockBehavior.FACTORY);
     }
 }

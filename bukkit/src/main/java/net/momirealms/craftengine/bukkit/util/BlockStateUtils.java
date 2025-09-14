@@ -5,12 +5,14 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 
+import javax.annotation.Nullable;
+
 import org.bukkit.block.Block;
 import org.bukkit.block.data.BlockData;
 import org.bukkit.inventory.ItemStack;
 import org.jetbrains.annotations.NotNull;
-import org.jetbrains.annotations.Nullable;
 
+import net.momirealms.craftengine.bukkit.block.BukkitBlockStateWrapper;
 import net.momirealms.craftengine.bukkit.nms.FastNMS;
 import net.momirealms.craftengine.bukkit.plugin.reflection.ReflectionInitException;
 import net.momirealms.craftengine.bukkit.plugin.reflection.minecraft.CoreReflections;
@@ -43,23 +45,18 @@ public final class BlockStateUtils {
         hasInit = true;
     }
 
-    public static BlockStateWrapper toPackedBlockState(BlockData blockData) {
+    public static BlockStateWrapper toBlockStateWrapper(BlockData blockData) {
         Object state = blockDataToBlockState(blockData);
         int id = blockStateToId(state);
-        return BlockStateWrapper.create(state, id, isVanillaBlock(id));
+        return new BukkitBlockStateWrapper(state, id);
     }
 
     public static boolean isCorrectTool(@NotNull ImmutableBlockState state, @Nullable Item<ItemStack> itemInHand) {
         BlockSettings settings = state.settings();
         if (settings.requireCorrectTool()) {
-            if (itemInHand == null)
-                return false;
-            if (!settings.isCorrectTool(itemInHand.id()) &&
-                    (!settings.respectToolComponent()
-                            || !FastNMS.INSTANCE.method$ItemStack$isCorrectToolForDrops(itemInHand.getLiteralObject(),
-                                    state.customBlockState().handle()))) {
-                return false;
-            }
+            if (itemInHand == null || itemInHand.isEmpty()) return false;
+            return settings.isCorrectTool(itemInHand.id()) ||
+                    (settings.respectToolComponent() && FastNMS.INSTANCE.method$ItemStack$isCorrectToolForDrops(itemInHand.getLiteralObject(), state.customBlockState().literalObject()));
         }
         return true;
     }
@@ -152,9 +149,7 @@ public final class BlockStateUtils {
     }
 
     public static Object getBlockState(Block block) {
-        Object worldServer = FastNMS.INSTANCE.field$CraftWorld$ServerLevel(block.getWorld());
-        Object blockPos = LocationUtils.toBlockPos(block.getX(), block.getY(), block.getZ());
-        return FastNMS.INSTANCE.method$BlockGetter$getBlockState(worldServer, blockPos);
+        return FastNMS.INSTANCE.method$BlockGetter$getBlockState(FastNMS.INSTANCE.field$CraftWorld$ServerLevel(block.getWorld()), LocationUtils.toBlockPos(block.getX(), block.getY(), block.getZ()));
     }
     /**
      * Utility method to remove a BlockStateHitBox placed block and handle container
@@ -201,7 +196,7 @@ public final class BlockStateUtils {
         } else {
             // Fallback to air if no original state was stored
             net.momirealms.craftengine.core.block.BlockStateWrapper airState = net.momirealms.craftengine.core.plugin.CraftEngine
-                    .instance().blockManager().createPackedBlockState("minecraft:air");
+                    .instance().blockManager().createBlockState("minecraft:air");
             if (airState != null) {
                 int flags = net.momirealms.craftengine.core.block.UpdateOption.Flags.UPDATE_CLIENTS |
                         net.momirealms.craftengine.core.block.UpdateOption.Flags.UPDATE_SUPPRESS_DROPS;

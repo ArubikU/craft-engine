@@ -7,6 +7,8 @@ import it.unimi.dsi.fastutil.ints.Int2IntOpenHashMap;
 import it.unimi.dsi.fastutil.ints.Int2ObjectOpenHashMap;
 import it.unimi.dsi.fastutil.ints.IntArrayList;
 import it.unimi.dsi.fastutil.objects.ObjectArrayList;
+import net.momirealms.craftengine.bukkit.block.entity.renderer.BukkitBlockEntityElement;
+import net.momirealms.craftengine.bukkit.item.BukkitItemManager;
 import net.momirealms.craftengine.bukkit.nms.FastNMS;
 import net.momirealms.craftengine.bukkit.plugin.BukkitCraftEngine;
 import net.momirealms.craftengine.bukkit.plugin.injector.BlockGenerator;
@@ -23,7 +25,10 @@ import net.momirealms.craftengine.bukkit.util.RegistryUtils;
 import net.momirealms.craftengine.bukkit.util.TagUtils;
 import net.momirealms.craftengine.core.block.*;
 import net.momirealms.craftengine.core.block.behavior.EmptyBlockBehavior;
+import net.momirealms.craftengine.core.block.entity.render.BlockEntityElement;
 import net.momirealms.craftengine.core.block.parser.BlockStateParser;
+import net.momirealms.craftengine.core.entity.Billboard;
+import net.momirealms.craftengine.core.entity.ItemDisplayContext;
 import net.momirealms.craftengine.core.plugin.config.StringKeyConstructor;
 import net.momirealms.craftengine.core.plugin.locale.LocalizedResourceConfigException;
 import net.momirealms.craftengine.core.registry.BuiltInRegistries;
@@ -181,14 +186,14 @@ public final class BukkitBlockManager extends AbstractBlockManager {
 
     @Nullable
     @Override
-    public BlockStateWrapper createPackedBlockState(String blockState) {
+    public BlockStateWrapper createBlockState(String blockState) {
         ImmutableBlockState state = BlockStateParser.deserialize(blockState);
         if (state != null) {
             return state.customBlockState();
         }
         try {
             BlockData blockData = Bukkit.createBlockData(blockState);
-            return BlockStateUtils.toPackedBlockState(blockData);
+            return BlockStateUtils.toBlockStateWrapper(blockData);
         } catch (IllegalArgumentException e) {
             return null;
         }
@@ -231,7 +236,7 @@ public final class BukkitBlockManager extends AbstractBlockManager {
 
     @Override
     public Key getBlockOwnerId(BlockStateWrapper state) {
-        return BlockStateUtils.getBlockOwnerIdFromState(state.handle());
+        return BlockStateUtils.getBlockOwnerIdFromState(state.literalObject());
     }
 
     @Override
@@ -258,9 +263,9 @@ public final class BukkitBlockManager extends AbstractBlockManager {
         int size = RegistryUtils.currentBlockRegistrySize();
         BlockStateWrapper[] states = new BlockStateWrapper[size];
         for (int i = 0; i < size; i++) {
-            states[i] = BlockStateWrapper.create(BlockStateUtils.idToBlockState(i), i, BlockStateUtils.isVanillaBlock(i));
+            states[i] = new BukkitBlockStateWrapper(BlockStateUtils.idToBlockState(i), i);
         }
-        BlockRegistryMirror.init(states, BlockStateWrapper.vanilla(MBlocks.STONE$defaultState, BlockStateUtils.blockStateToId(MBlocks.STONE$defaultState)));
+        BlockRegistryMirror.init(states, new BukkitBlockStateWrapper(MBlocks.STONE$defaultState, BlockStateUtils.blockStateToId(MBlocks.STONE$defaultState)));
     }
 
     private void registerEmptyBlock() {
@@ -683,5 +688,21 @@ public final class BukkitBlockManager extends AbstractBlockManager {
             return true;
         }
         return FastNMS.INSTANCE.method$Registry$getValue(MBuiltInRegistries.BLOCK, KeyUtils.toResourceLocation(id)) != MBlocks.AIR;
+    }
+
+    @Override
+    protected BlockEntityElement createBlockEntityElement(Map<String, Object> arguments) {
+        Key itemId = Key.of(ResourceConfigUtils.requireNonEmptyStringOrThrow(arguments.get("item"), ""));
+        return new BukkitBlockEntityElement(
+                LazyReference.lazyReference(() -> BukkitItemManager.instance().createWrappedItem(itemId, null)),
+                ResourceConfigUtils.getAsVector3f(arguments.getOrDefault("scale", 1f), "scale"),
+                ResourceConfigUtils.getAsVector3f(arguments.getOrDefault("position", 0.5f), "position"),
+                ResourceConfigUtils.getAsVector3f(arguments.get("translation"), "translation"),
+                ResourceConfigUtils.getAsFloat(arguments.getOrDefault("pitch", 0f), "pitch"),
+                ResourceConfigUtils.getAsFloat(arguments.getOrDefault("yaw", 0f), "yaw"),
+                ResourceConfigUtils.getAsQuaternionf(arguments.getOrDefault("rotation", 0f), "rotation"),
+                ItemDisplayContext.valueOf(arguments.getOrDefault("display-context", "none").toString().toUpperCase(Locale.ROOT)),
+                Billboard.valueOf(arguments.getOrDefault("billboard", "fixed").toString().toUpperCase(Locale.ROOT))
+        );
     }
 }

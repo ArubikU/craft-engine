@@ -4,7 +4,8 @@ import it.unimi.dsi.fastutil.objects.Reference2ObjectArrayMap;
 import net.momirealms.craftengine.core.block.behavior.EntityBlockBehavior;
 import net.momirealms.craftengine.core.block.entity.BlockEntity;
 import net.momirealms.craftengine.core.block.entity.BlockEntityType;
-import net.momirealms.craftengine.core.block.entity.render.BlockEntityRendererConfig;
+import net.momirealms.craftengine.core.block.entity.render.element.BlockEntityElement;
+import net.momirealms.craftengine.core.block.entity.render.element.BlockEntityElementConfig;
 import net.momirealms.craftengine.core.block.entity.tick.BlockEntityTicker;
 import net.momirealms.craftengine.core.block.properties.Property;
 import net.momirealms.craftengine.core.entity.player.Player;
@@ -28,11 +29,10 @@ public final class ImmutableBlockState extends BlockStateHolder {
     private BlockStateWrapper customBlockState;
     private BlockStateWrapper vanillaBlockState;
     private BlockBehavior behavior;
-    private Integer hashCode;
     private BlockSettings settings;
     private BlockEntityType<? extends BlockEntity> blockEntityType;
     @Nullable
-    private BlockEntityRendererConfig renderer;
+    private BlockEntityElementConfig<? extends BlockEntityElement>[] renderers;
 
     ImmutableBlockState(
             Holder<CustomBlock> owner,
@@ -69,36 +69,20 @@ public final class ImmutableBlockState extends BlockStateHolder {
         return this == EmptyBlock.STATE;
     }
 
-    @Nullable
-    public BlockEntityRendererConfig entityRenderer() {
-        return this.renderer;
+    public BlockEntityElementConfig<? extends BlockEntityElement>[] constantRenderers() {
+        return this.renderers;
     }
 
-    public void setEntityRenderer(@Nullable BlockEntityRendererConfig rendererConfig) {
-        this.renderer = rendererConfig;
-    }
-
-    @Override
-    public boolean equals(Object o) {
-        if (this == o) return true;
-        if (!(o instanceof ImmutableBlockState state)) return false;
-        return state.owner == this.owner && state.tag.equals(this.tag);
-    }
-
-    @Override
-    public int hashCode() {
-        if (this.hashCode == null) {
-            this.hashCode = getNbtToSave().hashCode();
-        }
-        return this.hashCode;
+    public void setConstantRenderers(BlockEntityElementConfig<? extends BlockEntityElement>[] renderers) {
+        this.renderers = renderers;
     }
 
     public boolean hasBlockEntity() {
         return this.blockEntityType != null;
     }
 
-    public boolean hasBlockEntityRenderer() {
-        return this.renderer != null;
+    public boolean hasConstantBlockEntityRenderer() {
+        return this.renderers != null;
     }
 
     public BlockStateWrapper customBlockState() {

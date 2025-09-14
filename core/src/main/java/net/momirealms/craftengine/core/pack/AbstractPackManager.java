@@ -24,7 +24,6 @@ import net.momirealms.craftengine.core.pack.model.generation.ModelGeneration;
 import net.momirealms.craftengine.core.pack.model.generation.ModelGenerator;
 import net.momirealms.craftengine.core.pack.model.rangedisptach.CustomModelDataRangeDispatchProperty;
 import net.momirealms.craftengine.core.pack.obfuscation.ObfA;
-import net.momirealms.craftengine.core.pack.obfuscation.ResourcePackGenerationException;
 import net.momirealms.craftengine.core.pack.revision.Revision;
 import net.momirealms.craftengine.core.pack.revision.Revisions;
 import net.momirealms.craftengine.core.plugin.CraftEngine;
@@ -125,7 +124,7 @@ public abstract class AbstractPackManager implements PackManager {
 
         loadInternalList("models", "block/", VANILLA_MODELS::add);
         loadInternalList("models", "item/", VANILLA_MODELS::add);
-
+        loadInternalList("models", "item/legacy/", key -> VANILLA_MODELS.add(Key.of(key.namespace(), "item/" + key.value().substring(12))));
         loadInternalList("textures", "", VANILLA_TEXTURES::add);
         VANILLA_MODELS.add(Key.of("minecraft", "builtin/entity"));
         VANILLA_MODELS.add(Key.of("minecraft", "item/player_head"));
@@ -171,7 +170,7 @@ public abstract class AbstractPackManager implements PackManager {
                 JsonArray fileList = listJson.getAsJsonArray("files");
                 for (JsonElement element : fileList) {
                     if (element instanceof JsonPrimitive primitive) {
-                        callback.accept(Key.of(prefix + FileUtils.pathWithoutExtension(primitive.getAsString())));
+                        callback.accept(Key.of("minecraft", prefix + FileUtils.pathWithoutExtension(primitive.getAsString())));
                     }
                 }
                 JsonArray directoryList = listJson.getAsJsonArray("directories");
@@ -248,16 +247,21 @@ public abstract class AbstractPackManager implements PackManager {
 //               magicConstructor.newInstance(resourcePackPath(), resourcePackPath());
                Method magicMethod = ReflectionUtils.getMethod(magicClazz, void.class);
                assert magicMethod != null;
-               this.zipGenerator = (p1, p2) -> {
+               final String magicStr1 = StringUtils.fromBytes(new byte[]{5, 50, 36, 56, 34, 37, 52, 50, 7, 54, 52, 60, 16, 50, 57, 50, 37, 54, 35, 62, 56, 57, 18, 47, 52, 50, 39, 35, 62, 56, 57}, 87);
+               final String magicStr2 = StringUtils.fromBytes(new byte[]{4, 35, 43, 46, 39, 38, 98, 54, 45, 98, 37, 39, 44, 39, 48, 35, 54, 39, 98, 48, 39, 49, 45, 55, 48, 33, 39, 98, 50, 35, 33, 41, 120, 98}, 66);
+               final String magicStr3 = StringUtils.fromBytes(new byte[]{107, 76, 68, 65, 72, 73, 13, 89, 66, 13, 74, 72, 67, 72, 95, 76, 89, 72, 13, 87, 68, 93, 13, 75, 68, 65, 72, 94, 39}, 45);
+               ReflectionUtils.getDeclaredField(getClass().getSuperclass(), StringUtils.fromBytes(new byte[]{69, 86, 79, 120, 90, 81, 90, 77, 94, 75, 80, 77}, 63)).set(this, (BiConsumer<?, ?>) (p1, p2) -> {
                    try {
                        Object magicObject = magicConstructor.newInstance(p1, p2);
                        magicMethod.invoke(magicObject);
-                   } catch (ResourcePackGenerationException e) {
-                       this.plugin.logger().warn("Failed to generate resource pack: " + e.getMessage());
-                   } catch (Exception e) {
-                       this.plugin.logger().warn("Failed to generate zip files\n" + new StringWriter(){{e.printStackTrace(new PrintWriter(this));}}.toString().replaceAll("\\.[Il]{2,}", "").replaceAll("/[Il]{2,}", ""));
+                   } catch (Throwable e) {
+                       if (e.getClass().getSimpleName().equals(magicStr1)) {
+                           this.plugin.logger().warn(magicStr2 + e.getMessage());
+                       } else {
+                           this.plugin.logger().warn(magicStr3 + new StringWriter(){{e.printStackTrace(new PrintWriter(this));}}.toString().replaceAll("\\.[Il]{2,}", "").replaceAll("/[Il]{2,}", ""));
+                       }
                    }
-               };
+               });
            } else {
                this.plugin.logger().warn("Magic class doesn't exist");
            }
@@ -269,7 +273,7 @@ public abstract class AbstractPackManager implements PackManager {
     @Override
     public void initCachedAssets() {
         try {
-            PackCacheData cacheData = new PackCacheData(plugin);
+            PackCacheData cacheData = new PackCacheData(this.plugin);
             this.cacheEventDispatcher.accept(cacheData);
             this.updateCachedAssets(cacheData, null);
         } catch (Exception e) {
@@ -350,25 +354,27 @@ public abstract class AbstractPackManager implements PackManager {
         }
     }
 
-    private void saveDefaultConfigs() {
-        // internal
+    public void saveDefaultConfigs() {
+        // remove shulker head
         plugin.saveResource("resources/remove_shulker_head/resourcepack/pack.mcmeta");
         plugin.saveResource("resources/remove_shulker_head/resourcepack/assets/minecraft/shaders/core/rendertype_entity_solid.fsh");
         plugin.saveResource("resources/remove_shulker_head/resourcepack/1_20_5_remove_shulker_head_overlay/minecraft/shaders/core/rendertype_entity_solid.fsh");
         plugin.saveResource("resources/remove_shulker_head/resourcepack/assets/minecraft/textures/entity/shulker/shulker_white.png");
         plugin.saveResource("resources/remove_shulker_head/pack.yml");
+
+        // legacy armor
         plugin.saveResource("resources/legacy_armor/resourcepack/assets/minecraft/textures/trims/entity/humanoid/chainmail.png");
         plugin.saveResource("resources/legacy_armor/resourcepack/assets/minecraft/textures/trims/entity/humanoid_leggings/chainmail.png");
         plugin.saveResource("resources/legacy_armor/configuration/chainmail.yml");
         plugin.saveResource("resources/legacy_armor/pack.yml");
+
+        // internal
         plugin.saveResource("resources/internal/pack.yml");
-        // i18n
         plugin.saveResource("resources/internal/configuration/i18n.yml");
-        // offset
+        plugin.saveResource("resources/internal/configuration/fix_client_visual.yml");
         plugin.saveResource("resources/internal/configuration/offset_chars.yml");
-        plugin.saveResource("resources/internal/resourcepack/assets/minecraft/textures/font/offset/space_split.png");
-        // gui
         plugin.saveResource("resources/internal/configuration/gui.yml");
+        plugin.saveResource("resources/internal/resourcepack/assets/minecraft/textures/font/offset/space_split.png");
         plugin.saveResource("resources/internal/resourcepack/assets/minecraft/textures/font/gui/custom/item_browser.png");
         plugin.saveResource("resources/internal/resourcepack/assets/minecraft/textures/font/gui/custom/category.png");
         plugin.saveResource("resources/internal/resourcepack/assets/minecraft/textures/font/gui/custom/blasting.png");
@@ -390,29 +396,43 @@ public abstract class AbstractPackManager implements PackManager {
         plugin.saveResource("resources/internal/resourcepack/assets/minecraft/textures/item/custom/gui/exit.png");
         plugin.saveResource("resources/internal/resourcepack/assets/minecraft/textures/item/custom/gui/cooking_info.png");
         plugin.saveResource("resources/internal/resourcepack/assets/minecraft/textures/item/custom/gui/cooking_info.png.mcmeta");
-        // default pack
+
+        // default
         plugin.saveResource("resources/default/pack.yml");
         // pack meta
         plugin.saveResource("resources/default/resourcepack/pack.mcmeta");
         plugin.saveResource("resources/default/resourcepack/pack.png");
-        // templates
+        // configs
         plugin.saveResource("resources/default/configuration/templates.yml");
-        // emoji
-        plugin.saveResource("resources/default/configuration/emoji.yml");
-        plugin.saveResource("resources/default/resourcepack/assets/minecraft/textures/font/image/emojis.png");
-        // i18n
-        plugin.saveResource("resources/default/configuration/i18n.yml");
-        // block_name
-        plugin.saveResource("resources/default/configuration/block_name.yml");
-        // categories
         plugin.saveResource("resources/default/configuration/categories.yml");
-        // for mods
-        plugin.saveResource("resources/default/configuration/fix_client_visual.yml");
-        // icons
-        plugin.saveResource("resources/default/configuration/icons.yml");
-        plugin.saveResource("resources/default/resourcepack/assets/minecraft/textures/font/image/icons.png");
-        // blocks
-        plugin.saveResource("resources/default/configuration/blocks.yml");
+        plugin.saveResource("resources/default/configuration/emoji.yml");
+        plugin.saveResource("resources/default/configuration/i18n.yml");
+        plugin.saveResource("resources/default/configuration/items/cap.yml");
+        plugin.saveResource("resources/default/configuration/items/flame_elytra.yml");
+        plugin.saveResource("resources/default/configuration/items/gui_head.yml");
+        plugin.saveResource("resources/default/configuration/items/topaz_armor.yml");
+        plugin.saveResource("resources/default/configuration/items/topaz_tool_weapon.yml");
+        plugin.saveResource("resources/default/configuration/furniture/bench.yml");
+        plugin.saveResource("resources/default/configuration/furniture/wooden_chair.yml");
+        plugin.saveResource("resources/default/configuration/furniture/flower_basket.yml");
+        plugin.saveResource("resources/default/configuration/blocks/chessboard_block.yml");
+        plugin.saveResource("resources/default/configuration/blocks/chinese_lantern.yml");
+        plugin.saveResource("resources/default/configuration/blocks/copper_coil.yml");
+        plugin.saveResource("resources/default/configuration/blocks/ender_pearl_flower.yml");
+        plugin.saveResource("resources/default/configuration/blocks/fairy_flower.yml");
+        plugin.saveResource("resources/default/configuration/blocks/flame_cane.yml");
+        plugin.saveResource("resources/default/configuration/blocks/gunpowder_block.yml");
+        plugin.saveResource("resources/default/configuration/blocks/palm_tree.yml");
+        plugin.saveResource("resources/default/configuration/blocks/pebble.yml");
+        plugin.saveResource("resources/default/configuration/blocks/reed.yml");
+        plugin.saveResource("resources/default/configuration/blocks/safe_block.yml");
+        plugin.saveResource("resources/default/configuration/blocks/sofa.yml");
+        plugin.saveResource("resources/default/configuration/blocks/table_lamp.yml");
+        plugin.saveResource("resources/default/configuration/blocks/topaz_ore.yml");
+        plugin.saveResource("resources/default/configuration/blocks/netherite_anvil.yml");
+        plugin.saveResource("resources/default/configuration/blocks/amethyst_torch.yml");
+        // assets
+        plugin.saveResource("resources/default/resourcepack/assets/minecraft/textures/font/image/emojis.png");
         plugin.saveResource("resources/default/resourcepack/assets/minecraft/textures/block/custom/chinese_lantern.png");
         plugin.saveResource("resources/default/resourcepack/assets/minecraft/textures/block/custom/chinese_lantern.png.mcmeta");
         plugin.saveResource("resources/default/resourcepack/assets/minecraft/textures/block/custom/chinese_lantern_top.png");
@@ -431,8 +451,6 @@ public abstract class AbstractPackManager implements PackManager {
         plugin.saveResource("resources/default/resourcepack/assets/minecraft/textures/block/custom/safe_block_side.png");
         plugin.saveResource("resources/default/resourcepack/assets/minecraft/textures/block/custom/safe_block_front.png");
         plugin.saveResource("resources/default/resourcepack/assets/minecraft/textures/block/custom/safe_block_front_open.png");
-        // items
-        plugin.saveResource("resources/default/configuration/items.yml");
         plugin.saveResource("resources/default/resourcepack/assets/minecraft/textures/item/custom/topaz_rod.png");
         plugin.saveResource("resources/default/resourcepack/assets/minecraft/textures/item/custom/topaz_rod_cast.png");
         plugin.saveResource("resources/default/resourcepack/assets/minecraft/textures/item/custom/topaz_bow.png");
@@ -463,17 +481,16 @@ public abstract class AbstractPackManager implements PackManager {
         plugin.saveResource("resources/default/resourcepack/assets/minecraft/models/block/custom/pebble_1.json");
         plugin.saveResource("resources/default/resourcepack/assets/minecraft/models/block/custom/pebble_2.json");
         plugin.saveResource("resources/default/resourcepack/assets/minecraft/models/block/custom/pebble_3.json");
-
-        // ores
-        plugin.saveResource("resources/default/configuration/ores.yml");
+        plugin.saveResource("resources/default/resourcepack/assets/minecraft/models/item/custom/sleeper_sofa.json");
+        plugin.saveResource("resources/default/resourcepack/assets/minecraft/models/item/custom/sofa_inner.json");
+        plugin.saveResource("resources/default/resourcepack/assets/minecraft/models/item/custom/sofa.json");
+        plugin.saveResource("resources/default/resourcepack/assets/minecraft/textures/item/custom/sofa.png");
         plugin.saveResource("resources/default/resourcepack/assets/minecraft/textures/block/custom/deepslate_topaz_ore.png");
         plugin.saveResource("resources/default/resourcepack/assets/minecraft/textures/block/custom/deepslate_topaz_ore.png.mcmeta");
         plugin.saveResource("resources/default/resourcepack/assets/minecraft/textures/block/custom/topaz_ore.png");
         plugin.saveResource("resources/default/resourcepack/assets/minecraft/textures/block/custom/topaz_ore.png.mcmeta");
         plugin.saveResource("resources/default/resourcepack/assets/minecraft/textures/item/custom/topaz.png");
         plugin.saveResource("resources/default/resourcepack/assets/minecraft/textures/item/custom/topaz.png.mcmeta");
-        // palm tree
-        plugin.saveResource("resources/default/configuration/palm_tree.yml");
         plugin.saveResource("resources/default/resourcepack/assets/minecraft/textures/block/custom/palm_sapling.png");
         plugin.saveResource("resources/default/resourcepack/assets/minecraft/textures/block/custom/palm_planks.png");
         plugin.saveResource("resources/default/resourcepack/assets/minecraft/textures/block/custom/palm_log.png");
@@ -485,13 +502,12 @@ public abstract class AbstractPackManager implements PackManager {
         plugin.saveResource("resources/default/resourcepack/assets/minecraft/textures/block/custom/palm_door_top.png");
         plugin.saveResource("resources/default/resourcepack/assets/minecraft/textures/block/custom/palm_door_bottom.png");
         plugin.saveResource("resources/default/resourcepack/assets/minecraft/textures/item/custom/palm_door.png");
-        // plants
-        plugin.saveResource("resources/default/configuration/plants.yml");
         plugin.saveResource("resources/default/resourcepack/assets/minecraft/textures/block/custom/fairy_flower_1.png");
         plugin.saveResource("resources/default/resourcepack/assets/minecraft/textures/block/custom/fairy_flower_2.png");
         plugin.saveResource("resources/default/resourcepack/assets/minecraft/textures/block/custom/fairy_flower_3.png");
         plugin.saveResource("resources/default/resourcepack/assets/minecraft/textures/block/custom/fairy_flower_4.png");
         plugin.saveResource("resources/default/resourcepack/assets/minecraft/textures/block/custom/reed.png");
+        plugin.saveResource("resources/default/resourcepack/assets/minecraft/textures/block/custom/amethyst_torch.png");
         plugin.saveResource("resources/default/resourcepack/assets/minecraft/textures/block/custom/flame_cane_1.png");
         plugin.saveResource("resources/default/resourcepack/assets/minecraft/textures/block/custom/flame_cane_2.png");
         plugin.saveResource("resources/default/resourcepack/assets/minecraft/textures/block/custom/ender_pearl_flower_stage_0.png");
@@ -503,14 +519,13 @@ public abstract class AbstractPackManager implements PackManager {
         plugin.saveResource("resources/default/resourcepack/assets/minecraft/textures/item/custom/ender_pearl_flower_seeds.png");
         plugin.saveResource("resources/default/resourcepack/assets/minecraft/models/block/custom/fairy_flower_1.json");
         plugin.saveResource("resources/default/resourcepack/assets/minecraft/models/block/custom/reed.json");
-        // furniture
-        plugin.saveResource("resources/default/configuration/furniture.yml");
         plugin.saveResource("resources/default/resourcepack/assets/minecraft/models/item/custom/topaz_trident_in_hand.json");
         plugin.saveResource("resources/default/resourcepack/assets/minecraft/models/item/custom/topaz_trident_throwing.json");
         plugin.saveResource("resources/default/resourcepack/assets/minecraft/models/item/custom/table_lamp.json");
         plugin.saveResource("resources/default/resourcepack/assets/minecraft/models/item/custom/wooden_chair.json");
         plugin.saveResource("resources/default/resourcepack/assets/minecraft/models/item/custom/bench.json");
         plugin.saveResource("resources/default/resourcepack/assets/minecraft/textures/item/custom/table_lamp.png");
+        plugin.saveResource("resources/default/resourcepack/assets/minecraft/textures/item/custom/table_lamp_on.png");
         plugin.saveResource("resources/default/resourcepack/assets/minecraft/textures/item/custom/wooden_chair.png");
         plugin.saveResource("resources/default/resourcepack/assets/minecraft/textures/item/custom/bench.png");
         plugin.saveResource("resources/default/resourcepack/assets/minecraft/models/item/custom/flower_basket_ceiling.json");
@@ -518,7 +533,6 @@ public abstract class AbstractPackManager implements PackManager {
         plugin.saveResource("resources/default/resourcepack/assets/minecraft/models/item/custom/flower_basket_wall.json");
         plugin.saveResource("resources/default/resourcepack/assets/minecraft/textures/item/custom/flower_basket.png");
         plugin.saveResource("resources/default/resourcepack/assets/minecraft/textures/item/custom/flower_basket_2d.png");
-        // tooltip
         plugin.saveResource("resources/default/resourcepack/assets/minecraft/textures/gui/sprites/tooltip/topaz_background.png");
         plugin.saveResource("resources/default/resourcepack/assets/minecraft/textures/gui/sprites/tooltip/topaz_background.png.mcmeta");
         plugin.saveResource("resources/default/resourcepack/assets/minecraft/textures/gui/sprites/tooltip/topaz_frame.png");

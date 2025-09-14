@@ -7,8 +7,6 @@ import it.unimi.dsi.fastutil.ints.Int2IntOpenHashMap;
 import it.unimi.dsi.fastutil.ints.Int2ObjectOpenHashMap;
 import it.unimi.dsi.fastutil.ints.IntArrayList;
 import it.unimi.dsi.fastutil.objects.ObjectArrayList;
-import net.momirealms.craftengine.bukkit.block.entity.renderer.BukkitBlockEntityElement;
-import net.momirealms.craftengine.bukkit.item.BukkitItemManager;
 import net.momirealms.craftengine.bukkit.nms.FastNMS;
 import net.momirealms.craftengine.bukkit.plugin.BukkitCraftEngine;
 import net.momirealms.craftengine.bukkit.plugin.injector.BlockGenerator;
@@ -25,10 +23,7 @@ import net.momirealms.craftengine.bukkit.util.RegistryUtils;
 import net.momirealms.craftengine.bukkit.util.TagUtils;
 import net.momirealms.craftengine.core.block.*;
 import net.momirealms.craftengine.core.block.behavior.EmptyBlockBehavior;
-import net.momirealms.craftengine.core.block.entity.render.BlockEntityElement;
 import net.momirealms.craftengine.core.block.parser.BlockStateParser;
-import net.momirealms.craftengine.core.entity.Billboard;
-import net.momirealms.craftengine.core.entity.ItemDisplayContext;
 import net.momirealms.craftengine.core.plugin.config.StringKeyConstructor;
 import net.momirealms.craftengine.core.plugin.locale.LocalizedResourceConfigException;
 import net.momirealms.craftengine.core.registry.BuiltInRegistries;
@@ -81,7 +76,6 @@ public final class BukkitBlockManager extends AbstractBlockManager {
     private List<Key> blockRegisterOrder = new ObjectArrayList<>();
     // Event listeners
     private BlockEventListener blockEventListener;
-    private FallingBlockRemoveListener fallingBlockRemoveListener;
     // cached tag packet
     private Object cachedUpdateTagsPacket;
 
@@ -106,7 +100,6 @@ public final class BukkitBlockManager extends AbstractBlockManager {
         if (enableNoteBlocks) {
             this.recordVanillaNoteBlocks();
         }
-        this.fallingBlockRemoveListener = VersionHelper.isOrAbove1_20_3() ? new FallingBlockRemoveListener() : null;
         this.stateId2ImmutableBlockStates = new ImmutableBlockState[this.customBlockCount];
         Arrays.fill(this.stateId2ImmutableBlockStates, EmptyBlock.INSTANCE.defaultState());
         this.resetPacketConsumers();
@@ -128,9 +121,6 @@ public final class BukkitBlockManager extends AbstractBlockManager {
     @Override
     public void delayedInit() {
         Bukkit.getPluginManager().registerEvents(this.blockEventListener, this.plugin.javaPlugin());
-        if (this.fallingBlockRemoveListener != null) {
-            Bukkit.getPluginManager().registerEvents(this.fallingBlockRemoveListener, this.plugin.javaPlugin());
-        }
     }
 
     @Override
@@ -150,7 +140,6 @@ public final class BukkitBlockManager extends AbstractBlockManager {
     public void disable() {
         this.unload();
         HandlerList.unregisterAll(this.blockEventListener);
-        if (this.fallingBlockRemoveListener != null) HandlerList.unregisterAll(this.fallingBlockRemoveListener);
     }
 
     @Override
@@ -225,7 +214,7 @@ public final class BukkitBlockManager extends AbstractBlockManager {
         for (ImmutableBlockState state : customBlock.variantProvider().states()) {
             ImmutableBlockState previous = this.stateId2ImmutableBlockStates[state.customBlockState().registryId() - BlockStateUtils.vanillaStateSize()];
             if (previous != null && !previous.isEmpty()) {
-                throw new LocalizedResourceConfigException("warning.config.block.state.bind_failed", state.toString(), previous.toString());
+                throw new LocalizedResourceConfigException("warning.config.block.state.bind_failed", state.toString(), previous.toString(), BlockStateUtils.getBlockOwnerIdFromState(previous.customBlockState().literalObject()).toString());
             }
             this.stateId2ImmutableBlockStates[state.customBlockState().registryId() - BlockStateUtils.vanillaStateSize()] = state;
             this.tempBlockAppearanceConvertor.put(state.customBlockState().registryId(), state.vanillaBlockState().registryId());
@@ -688,21 +677,5 @@ public final class BukkitBlockManager extends AbstractBlockManager {
             return true;
         }
         return FastNMS.INSTANCE.method$Registry$getValue(MBuiltInRegistries.BLOCK, KeyUtils.toResourceLocation(id)) != MBlocks.AIR;
-    }
-
-    @Override
-    protected BlockEntityElement createBlockEntityElement(Map<String, Object> arguments) {
-        Key itemId = Key.of(ResourceConfigUtils.requireNonEmptyStringOrThrow(arguments.get("item"), ""));
-        return new BukkitBlockEntityElement(
-                LazyReference.lazyReference(() -> BukkitItemManager.instance().createWrappedItem(itemId, null)),
-                ResourceConfigUtils.getAsVector3f(arguments.getOrDefault("scale", 1f), "scale"),
-                ResourceConfigUtils.getAsVector3f(arguments.getOrDefault("position", 0.5f), "position"),
-                ResourceConfigUtils.getAsVector3f(arguments.get("translation"), "translation"),
-                ResourceConfigUtils.getAsFloat(arguments.getOrDefault("pitch", 0f), "pitch"),
-                ResourceConfigUtils.getAsFloat(arguments.getOrDefault("yaw", 0f), "yaw"),
-                ResourceConfigUtils.getAsQuaternionf(arguments.getOrDefault("rotation", 0f), "rotation"),
-                ItemDisplayContext.valueOf(arguments.getOrDefault("display-context", "none").toString().toUpperCase(Locale.ROOT)),
-                Billboard.valueOf(arguments.getOrDefault("billboard", "fixed").toString().toUpperCase(Locale.ROOT))
-        );
     }
 }

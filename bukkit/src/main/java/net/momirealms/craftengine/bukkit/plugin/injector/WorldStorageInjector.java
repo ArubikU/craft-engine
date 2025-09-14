@@ -241,9 +241,9 @@ public final class WorldStorageInjector {
                         chunk.removeBlockEntity(pos);
                     }
                 }
-                if (previousImmutableBlockState.hasBlockEntityRenderer()) {
+                if (previousImmutableBlockState.hasConstantBlockEntityRenderer()) {
                     BlockPos pos = new BlockPos(chunk.chunkPos.x * 16 + x, section.sectionY * 16 + y, chunk.chunkPos.z * 16 + z);
-                    chunk.removeBlockEntityRenderer(pos);
+                    chunk.removeConstantBlockEntityRenderer(pos);
                 }
             }
             if (newImmutableBlockState.hasBlockEntity()) {
@@ -262,11 +262,12 @@ public final class WorldStorageInjector {
                     blockEntity.setBlockState(newImmutableBlockState);
                     // 方块类型未变，仅更新状态，选择性更新ticker
                     chunk.replaceOrCreateTickingBlockEntity(blockEntity);
+                    chunk.createDynamicBlockEntityRenderer(blockEntity);
                 }
             }
-            if (newImmutableBlockState.hasBlockEntityRenderer()) {
+            if (newImmutableBlockState.hasConstantBlockEntityRenderer()) {
                 BlockPos pos = new BlockPos(chunk.chunkPos.x * 16 + x, section.sectionY * 16 + y, chunk.chunkPos.z * 16 + z);
-                chunk.addBlockEntityRenderer(pos, newImmutableBlockState);
+                chunk.addConstantBlockEntityRenderer(pos, newImmutableBlockState);
             }
             // 如果新方块的光照属性和客户端认为的不同
             if (Config.enableLightSystem()) {
@@ -294,9 +295,9 @@ public final class WorldStorageInjector {
                         chunk.removeBlockEntity(pos);
                     }
                 }
-                if (previous.hasBlockEntityRenderer()) {
+                if (previous.hasConstantBlockEntityRenderer()) {
                     BlockPos pos = new BlockPos(chunk.chunkPos.x * 16 + x, section.sectionY * 16 + y, chunk.chunkPos.z * 16 + z);
-                    chunk.removeBlockEntityRenderer(pos);
+                    chunk.removeConstantBlockEntityRenderer(pos);
                 }
                 if (Config.enableLightSystem()) {
                     // 自定义块到原版块，只需要判断旧块是否和客户端一直

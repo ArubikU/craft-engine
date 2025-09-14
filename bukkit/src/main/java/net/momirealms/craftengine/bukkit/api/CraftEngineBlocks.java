@@ -27,9 +27,27 @@ import org.bukkit.entity.Player;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
+import java.util.Map;
+
 public final class CraftEngineBlocks {
 
     private CraftEngineBlocks() {}
+
+    /**
+     *
+     * Returns an unmodifiable map of all currently loaded custom blocks.
+     * The map keys represent unique identifiers, and the values are the corresponding CustomBlock instances.
+     *
+     * <p><strong>Important:</strong> Do not attempt to access this method during the onEnable phase
+     * as it will be empty. Instead, listen for the {@code CraftEngineReloadEvent} and use this method
+     * after the event is fired to obtain the complete block list.
+     *
+     * @return a non-null map containing all loaded custom blocks
+     */
+    @NotNull
+    public static Map<Key, CustomBlock> loadedBlocks() {
+        return BukkitBlockManager.instance().loadedBlocks();
+    }
 
     /**
      * Gets a custom block by ID
@@ -188,9 +206,10 @@ public final class CraftEngineBlocks {
         if (dropLoot) {
             ContextHolder.Builder builder = new ContextHolder.Builder()
                     .withParameter(DirectContextParameters.POSITION, position);
-            BukkitServerPlayer serverPlayer = BukkitCraftEngine.instance().adapt(player);
+            BukkitServerPlayer serverPlayer = null;
             if (player != null) {
-                builder.withParameter(DirectContextParameters.PLAYER, serverPlayer);
+                serverPlayer = BukkitCraftEngine.instance().adapt(player);
+                builder.withOptionalParameter(DirectContextParameters.PLAYER, serverPlayer);
             }
             for (Item<?> item : state.getDrops(builder, world, serverPlayer)) {
                 world.dropItemNaturally(position, item);

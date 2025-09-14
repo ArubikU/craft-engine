@@ -60,6 +60,7 @@ import net.momirealms.craftengine.core.plugin.context.NetworkTextReplaceContext;
 import net.momirealms.craftengine.core.plugin.context.PlayerOptionalContext;
 import net.momirealms.craftengine.core.plugin.context.event.EventTrigger;
 import net.momirealms.craftengine.core.plugin.context.parameter.DirectContextParameters;
+import net.momirealms.craftengine.core.plugin.locale.TranslationManager;
 import net.momirealms.craftengine.core.plugin.logger.Debugger;
 import net.momirealms.craftengine.core.plugin.network.*;
 import net.momirealms.craftengine.core.plugin.text.component.ComponentProvider;
@@ -1239,17 +1240,17 @@ public class PacketConsumers {
         try {
             BukkitServerPlayer player = (BukkitServerPlayer) user;
             String name = (String) NetworkReflections.methodHandle$ServerboundHelloPacket$nameGetter.invokeExact(packet);
-            player.setName(name);
+            player.setUnverifiedName(name);
             if (VersionHelper.isOrAbove1_20_2()) {
                 UUID uuid = (UUID) NetworkReflections.methodHandle$ServerboundHelloPacket$uuidGetter.invokeExact(packet);
-                player.setUUID(uuid);
+                player.setUnverifiedUUID(uuid);
             } else {
                 @SuppressWarnings("unchecked")
                 Optional<UUID> uuid = (Optional<UUID>) NetworkReflections.methodHandle$ServerboundHelloPacket$uuidGetter.invokeExact(packet);
                 if (uuid.isPresent()) {
-                    player.setUUID(uuid.get());
+                    player.setUnverifiedUUID(uuid.get());
                 } else {
-                    player.setUUID(UUID.nameUUIDFromBytes(("OfflinePlayer:" + name).getBytes(StandardCharsets.UTF_8)));
+                    player.setUnverifiedUUID(UUID.nameUUIDFromBytes(("OfflinePlayer:" + name).getBytes(StandardCharsets.UTF_8)));
                 }
             }
         } catch (Throwable e) {
@@ -1608,6 +1609,11 @@ public class PacketConsumers {
                     if (serverPlayer.isAdventureMode() ||
                             !furniture.isValid()) return;
 
+                    // todo 重构家具时候注意，需要准备加载好的hitbox类，以获取hitbox坐标
+                    if (!serverPlayer.canInteractPoint(new Vec3d(location.getX(), location.getY(), location.getZ()), 16d)) {
+                        return;
+                    }
+
                     FurnitureAttemptBreakEvent preBreakEvent = new FurnitureAttemptBreakEvent(serverPlayer.platformPlayer(), furniture);
                     if (EventUtils.fireAndCheckCancel(preBreakEvent))
                         return;
@@ -1641,6 +1647,7 @@ public class PacketConsumers {
                 float x = buf.readFloat();
                 float y = buf.readFloat();
                 float z = buf.readFloat();
+                // todo 这个是错误的，这是实体的相对位置而非绝对位置
                 Location interactionPoint = new Location(platformPlayer.getWorld(), x, y, z);
                 InteractionHand hand = buf.readVarInt() == 0 ? InteractionHand.MAIN_HAND : InteractionHand.OFF_HAND;
                 boolean usingSecondaryAction = buf.readBoolean();
@@ -1657,6 +1664,11 @@ public class PacketConsumers {
 
                 mainThreadTask = () -> {
                     if (!furniture.isValid()) {
+                        return;
+                    }
+
+                    // todo 重构家具时候注意，需要准备加载好的hitbox类，以获取hitbox坐标
+                    if (!serverPlayer.canInteractPoint(new Vec3d(location.getX(), location.getY(), location.getZ()), 16d)) {
                         return;
                     }
 
@@ -2488,6 +2500,18 @@ public class PacketConsumers {
             // 防止后续加入的JoinWorldTask再次处理
             user.setShouldProcessFinishConfiguration(false);
 
+            // 检查用户UUID是否已经校验
+            if (!user.isUUIDVerified()) {
+                if (Config.strictPlayerUuidValidation()) {
+                    TranslationManager.instance().log("warning.network.resource_pack.unverified_uuid", user.name(), user.uuid().toString());
+                    user.kick(Component.translatable("disconnect.loginFailed"));
+                    return;
+                }
+                if (Config.debugResourcePack()) {
+                    TranslationManager.instance().log("warning.network.resource_pack.unverified_uuid", user.name(), user.uuid().toString());
+                }
+            }
+
             // 取消 ClientboundFinishConfigurationPacket，让客户端发呆，并结束掉当前的进入世界任务
             event.setCancelled(true);
             try {
@@ -2537,8 +2561,8 @@ public class PacketConsumers {
     public static final TriConsumer<NetWorkUser, NMSPacketEvent, Object> LOGIN_FINISHED = (user, event, packet) -> {
         try {
             GameProfile gameProfile = FastNMS.INSTANCE.field$ClientboundLoginFinishedPacket$gameProfile(packet);
-            user.setName(gameProfile.getName());
-            user.setUUID(gameProfile.getId());
+            user.setVerifiedName(gameProfile.getName());
+            user.setVerifiedUUID(gameProfile.getId());
         } catch (Exception e) {
             CraftEngine.instance().logger().warn("Failed to handle ClientboundLoginFinishedPacket", e);
         }

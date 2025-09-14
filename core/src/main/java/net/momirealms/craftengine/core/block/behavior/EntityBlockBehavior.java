@@ -18,4 +18,14 @@ public interface EntityBlockBehavior {
     default <T extends BlockEntity> BlockEntityTicker<T> createBlockEntityTicker(CEWorld level, ImmutableBlockState state, BlockEntityType<T> blockEntityType) {
         return null;
     }
+
+    @SuppressWarnings("unchecked")
+    static <E extends BlockEntity, T extends BlockEntity> BlockEntityTicker<E> createTickerHelper(BlockEntityTicker<? super T> ticker) {
+        return (BlockEntityTicker<E>) ticker;
+    }
+
+    @SuppressWarnings("unchecked")
+    static <E extends BlockEntity> BlockEntityType<E> blockEntityTypeHelper(BlockEntityType<?> type) {
+        return (BlockEntityType<E>) type;
+    }
 }

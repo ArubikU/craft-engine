@@ -12,6 +12,12 @@ import net.momirealms.craftengine.core.plugin.config.ConfigParser;
 import net.momirealms.craftengine.core.util.Key;
 import net.momirealms.craftengine.core.world.BlockPosition;
 import net.momirealms.craftengine.core.world.WorldPosition;
+import org.incendo.cloud.suggestion.Suggestion;
+import org.jetbrains.annotations.Nullable;
+
+import java.util.Collection;
+import java.util.Map;
+import java.util.Optional;
 
 public interface FurnitureManager extends Manageable {
     Key FURNITURE_KEY = Key.of("craftengine:furniture_id");
@@ -31,6 +37,8 @@ public interface FurnitureManager extends Manageable {
     Furniture place(WorldPosition position, CustomFurniture furniture, FurnitureExtraData extraData, boolean playSound);
 
     Optional<CustomFurniture> furnitureById(Key id);
+
+    Map<Key, CustomFurniture> loadedFurniture();
 
     boolean isFurnitureRealEntity(int entityId);
 

@@ -13,13 +13,13 @@ import net.momirealms.craftengine.bukkit.nms.FastNMS;
 import net.momirealms.craftengine.bukkit.plugin.BukkitCraftEngine;
 import net.momirealms.craftengine.bukkit.plugin.gui.CraftEngineGUIHolder;
 import net.momirealms.craftengine.bukkit.plugin.network.payload.DiscardedPayload;
-import net.momirealms.craftengine.bukkit.plugin.reflection.bukkit.CraftBukkitReflections;
 import net.momirealms.craftengine.bukkit.plugin.reflection.minecraft.CoreReflections;
 import net.momirealms.craftengine.bukkit.plugin.reflection.minecraft.MAttributeHolders;
 import net.momirealms.craftengine.bukkit.plugin.reflection.minecraft.MMobEffects;
 import net.momirealms.craftengine.bukkit.plugin.reflection.minecraft.NetworkReflections;
 import net.momirealms.craftengine.bukkit.util.*;
 import net.momirealms.craftengine.bukkit.world.BukkitWorld;
+import net.momirealms.craftengine.core.advancement.AdvancementType;
 import net.momirealms.craftengine.core.block.BlockStateWrapper;
 import net.momirealms.craftengine.core.block.ImmutableBlockState;
 import net.momirealms.craftengine.core.block.entity.BlockEntity;
@@ -37,10 +37,8 @@ import net.momirealms.craftengine.core.util.Direction;
 import net.momirealms.craftengine.core.util.IntIdentityList;
 import net.momirealms.craftengine.core.util.Key;
 import net.momirealms.craftengine.core.util.VersionHelper;
-import net.momirealms.craftengine.core.world.BlockPos;
-import net.momirealms.craftengine.core.world.Vec3d;
+import net.momirealms.craftengine.core.world.*;
 import net.momirealms.craftengine.core.world.World;
-import net.momirealms.craftengine.core.world.WorldEvents;
 import net.momirealms.craftengine.core.world.chunk.ChunkStatus;
 import net.momirealms.craftengine.core.world.collision.AABB;
 import org.bukkit.*;
@@ -48,6 +46,7 @@ import org.bukkit.attribute.Attribute;
 import org.bukkit.attribute.AttributeInstance;
 import org.bukkit.block.Block;
 import org.bukkit.event.player.PlayerCommandPreprocessEvent;
+import org.bukkit.event.player.PlayerTeleportEvent;
 import org.bukkit.inventory.EquipmentSlot;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.inventory.PlayerInventory;
@@ -72,6 +71,8 @@ public class BukkitServerPlayer extends Player {
     private ChannelHandler connection;
     private String name;
     private UUID uuid;
+    private boolean isNameVerified;
+    private boolean isUUIDVerified;
     private ConnectionState decoderState;
     private ConnectionState encoderState;
     private boolean shouldProcessFinishConfiguration = true;
@@ -140,7 +141,9 @@ public class BukkitServerPlayer extends Player {
         this.playerRef = new WeakReference<>(player);
         this.serverPlayerRef = new WeakReference<>(FastNMS.INSTANCE.method$CraftPlayer$getHandle(player));
         this.uuid = player.getUniqueId();
+        this.isUUIDVerified = true;
         this.name = player.getName();
+        this.isNameVerified = true;
         byte[] bytes = player.getPersistentDataContainer().get(KeyUtils.toNamespacedKey(CooldownData.COOLDOWN_KEY), PersistentDataType.BYTE_ARRAY);
         this.trackedChunks = ConcurrentLong2ReferenceChainedHashTable.createWithCapacity(768, 0.5f);
         this.entityTypeView = new ConcurrentHashMap<>(256);
@@ -237,6 +240,11 @@ public class BukkitServerPlayer extends Player {
     }
 
     @Override
+    public void sendToast(Component text, Item<?> icon, AdvancementType type) {
+        this.plugin.advancementManager().sendToast(this, icon, text, type);
+    }
+
+    @Override
     public void sendActionBar(Component text) {
         Object packet = FastNMS.INSTANCE.constructor$ClientboundActionBarPacket(ComponentUtils.adventureToMinecraft(text));
         sendPacket(packet, false);
@@ -316,9 +324,21 @@ public class BukkitServerPlayer extends Player {
     }
 
     @Override
-    public void setName(String name) {
-        if (this.name != null) return;
+    public boolean isNameVerified() {
+        return this.isNameVerified;
+    }
+
+    @Override
+    public void setUnverifiedName(String name) {
+        if (this.isNameVerified) return;
         this.name = name;
+    }
+
+    @Override
+    public void setVerifiedName(String name) {
+        if (this.isNameVerified) return;
+        this.name = name;
+        this.isNameVerified = true;
     }
 
     @Override
@@ -327,9 +347,21 @@ public class BukkitServerPlayer extends Player {
     }
 
     @Override
-    public void setUUID(UUID uuid) {
-        if (this.uuid != null) return;
+    public boolean isUUIDVerified() {
+        return this.isUUIDVerified;
+    }
+
+    @Override
+    public void setUnverifiedUUID(UUID uuid) {
+        if (this.isUUIDVerified) return;
         this.uuid = uuid;
+    }
+
+    @Override
+    public void setVerifiedUUID(UUID uuid) {
+        if (this.isUUIDVerified) return;
+        this.uuid = uuid;
+        this.isUUIDVerified = true;
     }
 
     @Override
@@ -492,9 +524,7 @@ public class BukkitServerPlayer extends Player {
 
     private void updateGUI() {
         org.bukkit.inventory.Inventory top = !VersionHelper.isOrAbove1_21() ? LegacyInventoryUtils.getTopInventory(platformPlayer()) : platformPlayer().getOpenInventory().getTopInventory();
-        if (!CraftBukkitReflections.clazz$MinecraftInventory.isInstance(FastNMS.INSTANCE.method$CraftInventory$getInventory(top))) {
-            return;
-        }
+        if (!InventoryUtils.isCustomContainer(top)) return;
         if (top.getHolder() instanceof CraftEngineGUIHolder holder) {
             holder.gui().onTimer();
         } else if (top.getHolder() instanceof BlockEntityHolder holder) {
@@ -511,6 +541,11 @@ public class BukkitServerPlayer extends Player {
         return (new AABB(pos)).distanceToSqr(this.getEyePosition()) < d * d;
     }
 
+    public boolean canInteractPoint(Vec3d pos, double distance) {
+        double d = this.getCachedInteractionRange() + distance;
+        return Vec3d.distanceToSqr(this.getEyePosition(), pos) < d * d;
+    }
+
     public final Vec3d getEyePosition() {
         Location eyeLocation = this.platformPlayer().getEyeLocation();
         return new Vec3d(eyeLocation.getX(), eyeLocation.getY(), eyeLocation.getZ());
@@ -523,7 +558,6 @@ public class BukkitServerPlayer extends Player {
         if (optionalCustomState.isPresent()) {
             ImmutableBlockState customState = optionalCustomState.get();
             Item<ItemStack> tool = getItemInHand(InteractionHand.MAIN_HAND);
-            boolean isCorrectTool = FastNMS.INSTANCE.method$ItemStack$isCorrectToolForDrops(tool.getLiteralObject(), blockState);
             // 如果自定义方块在服务端侧未使用正确的工具，那么需要还原挖掘速度
             if (!BlockStateUtils.isCorrectTool(customState, tool)) {
                 progress *= customState.settings().incorrectToolSpeed();
@@ -1093,5 +1127,11 @@ public class BukkitServerPlayer extends Player {
     @Override
     public void clearTrackedChunks() {
         this.trackedChunks.clear();
+    }
+
+    @Override
+    public void teleport(WorldPosition worldPosition) {
+        Location location = new Location((org.bukkit.World) worldPosition.world().platformWorld(), worldPosition.x(), worldPosition.y(), worldPosition.z(), worldPosition.yRot(), worldPosition.xRot());
+        this.platformPlayer().teleportAsync(location, PlayerTeleportEvent.TeleportCause.PLUGIN);
     }
 }
